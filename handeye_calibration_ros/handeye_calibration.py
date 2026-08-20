@@ -106,9 +106,9 @@ class HandEyeCalibrationNode(Node):
 
     def run(self):
         if self.mode != "eye_in_hand" and self.mode != "eye_to_hand":
-            raise ValueError("'mode' 必须为 eye_in_hand 或 eye_to_hand ")
+            raise ValueError("'mode' must be either eye_in_hand or eye_to_hand")
         if self.min_num < 5:
-            raise ValueError("最少采集次数不得小于5次")
+            raise ValueError("the minimum number of samples must be at least 5")
         self.get_poses()
         result_pose = self.process_handeye()
         result = dict(
@@ -117,7 +117,7 @@ class HandEyeCalibrationNode(Node):
             rpy = result_pose.rpy_list
         )
 
-        print("标定结果:")
+        print("calibration result:")
         print("")
         print(json.dumps(result, indent=4))
         print("")
@@ -130,13 +130,13 @@ class HandEyeCalibrationNode(Node):
     def get_poses(self):
         count = 1
         while True:
-            print(f"\n------- 第{count}次采集 ------")
+            print(f"\n------- sample {count} ------")
             if count == 1:
-                menu_str = "请输入(Enter-采集):"
+                menu_str = "input(Enter-sample):"
             elif count <= self.min_num:
-                menu_str = "请输入(Enter-采集, d-回退):"
+                menu_str = "input(Enter-sample, d-undo):"
             else:
-                menu_str = "请输入(Enter-采集, d-回退, q-计算并退出):"
+                menu_str = "input(Enter-sample, d-undo, q-calculate and exit):"
             try:
                 clear_input_buffer()
                 user_input = input(menu_str+" ")
@@ -158,15 +158,15 @@ class HandEyeCalibrationNode(Node):
                     print("exit")
                     exit(0)
                 elif count > self.min_num and user_input == 'q':
-                    print("开始计算标定结果")
+                    print("calculating calibration result")
                     break
                 else:
-                    print("无效输入")
+                    print("invalid input")
             except Exception as e:  # Exception as e
                 #exit(0)
                 #pass
                 #print(e)
-                print("\n程序异常或中断退出")
+                print("\nprogram error or interrupted, exiting")
                 exit(-1)	# -3
 
     def callback(self, msg):
