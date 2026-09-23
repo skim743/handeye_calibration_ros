@@ -35,7 +35,8 @@ class HandEyeCalibrationAutoNode(HandEyeCalibrationNode):
         self.declare_parameter('settle_time', 1.5)         # s within tolerance before capturing
         self.declare_parameter('move_timeout', 30.0)       # s per pose
         self.declare_parameter('capture_timeout', 5.0)     # s per topic message
-        self.declare_parameter('ignore_joints', ['joint7'])  # gripper is not checked for arrival
+        self.declare_parameter('ignore_joints', ['gripper', 'joint7'])  # gripper is not checked for arrival
+        self.declare_parameter('approach_offset', 0.0)     # rad; nonzero = pass through target + offset first
 
         self.samples_file = self.get_parameter('samples_file').get_parameter_value().string_value
         self.command_topic = self.get_parameter('command_topic').get_parameter_value().string_value
@@ -44,10 +45,12 @@ class HandEyeCalibrationAutoNode(HandEyeCalibrationNode):
         self.move_timeout = self.get_parameter('move_timeout').get_parameter_value().double_value
         self.capture_timeout = self.get_parameter('capture_timeout').get_parameter_value().double_value
         self.ignore_joints = list(self.get_parameter('ignore_joints').get_parameter_value().string_array_value)
+        self.approach_offset = self.get_parameter('approach_offset').get_parameter_value().double_value
 
         print(f"samples_file: {self.samples_file}")
         print(f"command_topic: {self.command_topic}")
         print(f"joint_tolerance: {self.joint_tolerance} rad, settle_time: {self.settle_time} s")
+        print(f"approach_offset: {self.approach_offset} rad")
 
         self.cmd_pub = self.create_publisher(JointState, self.command_topic, 10)
         self.feedback = None
@@ -71,7 +74,8 @@ class HandEyeCalibrationAutoNode(HandEyeCalibrationNode):
         self.destroy_subscription(sub)
         return msg
 
-    def move_to(self, names, positions):
+    def move_to(self, names, positions, settle_time=None):
+        settle_time = self.settle_time if settle_time is None else settle_time
         target = dict(zip(names, positions))
         checked = [n for n in names if n not in self.ignore_joints]
         cmd = JointState()
@@ -99,7 +103,7 @@ class HandEyeCalibrationAutoNode(HandEyeCalibrationNode):
             if err < self.joint_tolerance:
                 if reached_at is None:
                     reached_at = now
-                elif now - reached_at >= self.settle_time:
+                elif now - reached_at >= settle_time:
                     return True, err
             else:
                 reached_at = None
@@ -108,6 +112,9 @@ class HandEyeCalibrationAutoNode(HandEyeCalibrationNode):
     def get_poses(self):
         with open(self.samples_file) as json_file:
             recorded = json.load(json_file)
+        if 'samples' not in recorded:
+            print(f"{self.samples_file} has no 'samples' key; pass a *_samples.json, not a *_calibration.json")
+            exit(-1)
         samples = recorded['samples']
         self.num_recorded = len(samples)
         if recorded.get('mode') != self.mode:
@@ -121,6 +128,14 @@ class HandEyeCalibrationAutoNode(HandEyeCalibrationNode):
 
         for i, sample in enumerate(samples, start=1):
             print(f"\n------- pose {i}/{len(samples)} ------")
+            if self.approach_offset != 0.0:
+                # Every arm joint arrives from the same side, so gear backlash is taken up consistently
+                approach = [p if n in self.ignore_joints else p + self.approach_offset
+                            for n, p in zip(sample['joint_names'], sample['joint_positions'])]
+                reached, err = self.move_to(sample['joint_names'], approach, settle_time=0.0)
+                if not reached:
+                    print(f"WARNING: approach pose not reached (max joint error {err:.4f} rad), skipping")
+                    continue
             reached, err = self.move_to(sample['joint_names'], sample['joint_positions'])
             if not reached:
                 print(f"WARNING: pose not reached (max joint error {err:.4f} rad), skipping")
@@ -160,7 +175,7 @@ class HandEyeCalibrationAutoNode(HandEyeCalibrationNode):
               f"max {marker[:, 0].max():.1f} mm / {marker[:, 1].max():.2f} deg")
         create_dir(self.result_save_path)
         with open(f"{self.result_save_path}/{self.filename}_replay.json", 'w+') as json_file:
-            json.dump(dict(samples_file = self.samples_file, poses = self.replay), json_file, indent=4)
+            json.dump(dict(samples_file = self.samples_file, approach_offset = self.approach_offset, poses = self.replay), json_file, indent=4)
 
 def main(args=None):
     rclpy.init(args=args)
