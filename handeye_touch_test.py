@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*-coding:utf8-*-
-# Touch test for an eye_to_hand calibration: put the gripper tip on the center of a
-# marker lying in the workspace (teach mode), press Enter, and compare where the camera
-# says the marker is (through the calibration) with where the arm says the tip is.
+# Touch test for an eye_to_hand calibration: with the arm clear, measure a marker lying in
+# the workspace; then put the gripper tip on its center (teach mode) and read the joints.
+# Compares where the camera says the marker is (through the calibration) with where the
+# arm says the tip is. The arm occludes the marker while touching it, hence two steps.
 #
 # python3 handeye_touch_test.py --ros-args -p calibration_file:=<..._calibration.json>
 
@@ -71,9 +72,11 @@ class HandEyeTouchTestNode(Node):
         self.destroy_subscription(sub)
         return msgs[:count]
 
-    def measure(self):
+    def measure_marker(self):
         markers = self.collect(self.marker_topic, PoseStamped, self.marker_frames)
-        p_cam = np.array([[m.pose.position.x, m.pose.position.y, m.pose.position.z] for m in markers])
+        return np.array([[m.pose.position.x, m.pose.position.y, m.pose.position.z] for m in markers])
+
+    def measure_tip(self, p_cam):
         joint = self.collect(self.joint_topic, JointState, 1)[0]
         positions = dict(zip(joint.name, joint.position))
         q = [positions[n] for n in JOINT_NAMES]
@@ -104,14 +107,24 @@ class HandEyeTouchTestNode(Node):
         return path
 
     def run(self):
-        print("\nTeach mode: put the gripper tip on the test marker's center and hold still.")
+        print("\nPer point: place the marker with the arm clear of the camera view, measure it,")
+        print("then (teach mode) put the gripper tip on the marker's center without moving the marker.")
         while True:
-            user_input = input(f"\n[{len(self.points)} points] input(Enter-measure, d-undo, q-summary and exit): ")
+            user_input = input(f"\n[{len(self.points)} points] input(Enter-measure marker, d-undo, q-summary and exit): ")
             if user_input == '':
                 try:
-                    point = self.measure()
+                    p_cam = self.measure_marker()
+                except TimeoutError as e:
+                    print(f"marker measurement failed: {e}")
+                    continue
+                print(f"marker measured (jitter {np.linalg.norm(p_cam.std(axis=0)) * 1000:.1f} mm)")
+                if input("move the tip onto the marker center, input(Enter-measure tip, anything else-cancel): ") != '':
+                    print("point cancelled")
+                    continue
+                try:
+                    point = self.measure_tip(p_cam)
                 except (TimeoutError, KeyError) as e:
-                    print(f"measurement failed: {e}")
+                    print(f"tip measurement failed: {e}")
                     continue
                 self.points.append(point)
                 miss = np.array(point['miss']) * 1000
