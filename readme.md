@@ -79,11 +79,22 @@ $ ros2 run handeye_calibration_ros handeye_calibration --ros-args -p piper_topic
 |marker_topic|string|aruco_single/pose|camera-recognized calibration board pose topic（geometry_msgs/PoseStamped）|
 
 ### 2.5 Launch Files
-Two launch files wrap the record and auto-replay nodes with the eye-to-hand defaults used on the Piper setup. Rebuild after adding or editing them (`colcon build`), then override any argument with `name:=value`.
+Launch files wrap the record and auto-replay nodes with the eye-to-hand defaults used on the Piper setup. Rebuild after adding or editing them (`colcon build`), then override any argument with `name:=value`.
 
-Both launch files also start the RealSense camera (`_usb_port_id` 2-9 for `eye_to_hand`, 2-10 for `eye_in_hand`), the arm driver (`piper start_single_piper.launch.py`) and ArUco detection (`aruco_ros single.launch.py`), so sections 2.1–2.3 are not needed when using them. Defaults: `eye:=left marker_id:=100 marker_size:=0.1`.
+Use two terminals: the bringup launch file starts the sensors and arm, and the record/auto launch file runs the interactive calibration node (keyboard input only works when the calibration node is launched on its own).
 
-The calibration node opens in its own GNOME Terminal window (needs a display) after `start_delay` (default 5.0 s), since `ros2 launch` does not pass keyboard input to nodes. The window stays open after the node exits until you press Enter. Use another terminal with e.g. `terminal_prefix:='xterm -hold -e'`.
+#### 2.5.0 Bringup (`handeye_bringup.launch.py`)
+Starts the RealSense camera (color remapped to `/stereo/left/*`), the arm driver (`piper start_single_piper.launch.py`) and ArUco detection (`aruco_ros single.launch.py`), replacing sections 2.1–2.3. Start this first, then the record or auto launch file in a second terminal.
+```
+$ ros2 launch handeye_calibration_ros handeye_bringup.launch.py
+```
+
+|argument|default|Description|
+|---|---|---|
+|mode|eye_to_hand|selects the camera `_usb_port_id`: 2-9 for eye_to_hand, 2-10 for eye_in_hand|
+|eye|left|passed to aruco_ros|
+|marker_id|100|passed to aruco_ros|
+|marker_size|0.1|passed to aruco_ros (m)|
 
 `result_save_path` defaults to `./result`, so output files land relative to the directory you launch from.
 
