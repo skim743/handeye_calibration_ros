@@ -83,6 +83,8 @@ Two launch files wrap the record and auto-replay nodes with the eye-to-hand defa
 
 Both launch files also start the RealSense camera (`_usb_port_id` 2-9 for `eye_to_hand`, 2-10 for `eye_in_hand`), the arm driver (`piper start_single_piper.launch.py`) and ArUco detection (`aruco_ros single.launch.py`), so sections 2.1–2.3 are not needed when using them. Defaults: `eye:=left marker_id:=100 marker_size:=0.1`.
 
+The calibration node opens in its own GNOME Terminal window (needs a display) after `start_delay` (default 5.0 s), since `ros2 launch` does not pass keyboard input to nodes. The window stays open after the node exits until you press Enter. Use another terminal with e.g. `terminal_prefix:='xterm -hold -e'`.
+
 `result_save_path` defaults to `./result`, so output files land relative to the directory you launch from.
 
 #### 2.5.1 Record (`handeye_calibration_record.launch.py`)

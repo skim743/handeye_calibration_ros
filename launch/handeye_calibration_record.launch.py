@@ -49,6 +49,13 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        # ros2 launch does not give nodes keyboard input, so the interactive node gets its own window.
+        # --wait ties the window to the launch process; the trailing read keeps the window open after
+        # exit so the calibration result stays readable. The node command is appended as "$@".
+        DeclareLaunchArgument('terminal_prefix',
+                              default_value='gnome-terminal --wait --title=handeye_calibration -- '
+                                            'bash -c \'"$@"; read -p "Press Enter to close"\' _',
+                              description='terminal the calibration node runs in'),
         DeclareLaunchArgument('start_delay', default_value='5.0',
                               description='s to wait for camera/arm/aruco before starting calibration'),
         DeclareLaunchArgument('eye', default_value='left'),
@@ -59,15 +66,15 @@ def generate_launch_description():
         camera,
         piper,
         aruco,
-        # Start last so its Enter prompt isn't buried under the other nodes' startup logs
+        # Start last so camera, arm and aruco topics are up before the first sample
         TimerAction(
             period=LaunchConfiguration('start_delay'),
             actions=[
                 Node(
                     package='handeye_calibration_ros',
                     executable='handeye_calibration_record',
+                    prefix=LaunchConfiguration('terminal_prefix'),
                     output='screen',
-                    emulate_tty=True,
                     parameters=[{
                         'mode': mode,
                         'piper_topic': piper_topic,
