@@ -37,6 +37,7 @@ class HandEyeCalibrationAutoNode(HandEyeCalibrationNode):
         self.declare_parameter('capture_timeout', 5.0)     # s per topic message
         self.declare_parameter('ignore_joints', ['gripper', 'joint7'])  # gripper is not checked for arrival
         self.declare_parameter('approach_offset', 0.0)     # rad; nonzero = pass through target + offset first
+        self.declare_parameter('confirm_start', True)      # false = start moving without the Enter prompt (ros2 launch has no stdin)
 
         self.samples_file = self.get_parameter('samples_file').get_parameter_value().string_value
         self.command_topic = self.get_parameter('command_topic').get_parameter_value().string_value
@@ -46,6 +47,7 @@ class HandEyeCalibrationAutoNode(HandEyeCalibrationNode):
         self.capture_timeout = self.get_parameter('capture_timeout').get_parameter_value().double_value
         self.ignore_joints = list(self.get_parameter('ignore_joints').get_parameter_value().string_array_value)
         self.approach_offset = self.get_parameter('approach_offset').get_parameter_value().double_value
+        self.confirm_start = self.get_parameter('confirm_start').get_parameter_value().bool_value
 
         print(f"samples_file: {self.samples_file}")
         print(f"command_topic: {self.command_topic}")
@@ -122,7 +124,7 @@ class HandEyeCalibrationAutoNode(HandEyeCalibrationNode):
 
         print(f"\n{len(samples)} poses loaded. The arm must be enabled and NOT in teaching mode.")
         print("Clear the workspace; the arm moves in joint space to each pose.")
-        if input("input(Enter-start, anything else-abort): ") != '':
+        if self.confirm_start and input("input(Enter-start, anything else-abort): ") != '':
             print("aborted")
             exit(0)
 

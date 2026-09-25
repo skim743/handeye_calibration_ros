@@ -78,13 +78,11 @@ $ ros2 run handeye_calibration_ros handeye_calibration --ros-args -p piper_topic
 |piper_topic|string|piper_ctrl_node/end_pose|robotic arm's end-effector(geometry_msgs/Pose)|
 |marker_topic|string|aruco_single/pose|camera-recognized calibration board pose topic（geometry_msgs/PoseStamped）|
 
-### 2.5 Launch Files
-Launch files wrap the record and auto-replay nodes with the eye-to-hand defaults used on the Piper setup. Rebuild after adding or editing them (`colcon build`), then override any argument with `name:=value`.
-
-Use two terminals: the bringup launch file starts the sensors and arm, and the record/auto launch file runs the interactive calibration node (keyboard input only works when the calibration node is launched on its own).
+### 2.5 Bringup Launch + Record/Auto Nodes
+Use two terminals: `handeye_bringup.launch.py` starts the camera, arm and ArUco detection, and the record or auto node runs with `ros2 run` in a second terminal. The record node has no launch file because `ros2 launch` does not pass keyboard input to its nodes. Rebuild after editing launch files or adding samples (`colcon build`).
 
 #### 2.5.0 Bringup (`handeye_bringup.launch.py`)
-Starts the RealSense camera (color remapped to `/stereo/left/*`), the arm driver (`piper start_single_piper.launch.py`) and ArUco detection (`aruco_ros single.launch.py`), replacing sections 2.1–2.3. Start this first, then the record or auto launch file in a second terminal.
+Starts the RealSense camera (color remapped to `/stereo/left/*`), the arm driver (`piper start_single_piper.launch.py`) and ArUco detection (`aruco_ros single.launch.py`), replacing sections 2.1–2.3. Override any argument with `name:=value`.
 ```
 $ ros2 launch handeye_calibration_ros handeye_bringup.launch.py
 ```
@@ -96,41 +94,36 @@ $ ros2 launch handeye_calibration_ros handeye_bringup.launch.py
 |marker_id|100|passed to aruco_ros|
 |marker_size|0.1|passed to aruco_ros (m)|
 
-`result_save_path` defaults to `./result`, so output files land relative to the directory you launch from.
+`result_save_path` defaults to `./result`, so the nodes below write output relative to the directory you run them from.
 
-#### 2.5.1 Record (`handeye_calibration_record.launch.py`)
+#### 2.5.1 Record
 Manual collection in teaching mode, same keys as 2.4. Each sample's joint state is also saved to `<timestamp>_samples.json` for later replay.
-```
-$ ros2 launch handeye_calibration_ros handeye_calibration_record.launch.py
-```
-Equivalent to:
 ```
 $ ros2 run handeye_calibration_ros handeye_calibration_record --ros-args -p mode:=eye_to_hand -p piper_topic:=/end_pose
 ```
 
-|argument|default|
-|---|---|
-|mode|eye_to_hand|
-|piper_topic|/end_pose|
+#### 2.5.2 Auto replay
+Drives the arm through the joint configurations in a `*_samples.json` (position control, arm enabled and **not** in teaching mode), recollects every sample, and solves.
 
-#### 2.5.2 Auto replay (`handeye_calibration_auto.launch.py`)
-Drives the arm through the joint configurations in a `*_samples.json` (position control, arm enabled and **not** in teaching mode), recollects every sample, and solves. Press `Enter` to start once the workspace is clear.
+`handeye_calibration_auto.launch.py` runs everything in one terminal: it includes the bringup launch file and starts the auto node after `start_delay` (default 5.0 s). **There is no Enter prompt: the arm starts moving as soon as the delay ends, so clear the workspace before launching.** It takes the bringup arguments plus the parameters in the table below.
 ```
-$ ros2 launch handeye_calibration_ros handeye_calibration_auto.launch.py samples_file:=/handeye_ws/result/<timestamp>_samples.json
+$ ros2 launch handeye_calibration_ros handeye_calibration_auto.launch.py
 ```
-Equivalent to:
+Or with bringup already running, run the node on its own; it asks for `Enter` before moving (`confirm_start` defaults to true):
 ```
-$ ros2 run handeye_calibration_ros handeye_calibration_auto --ros-args -p samples_file:=<share>/calibration_files/2026-09-23_19-04-23_samples.json -p mode:=eye_to_hand -p piper_topic:=/end_pose -p settle_time:=5.0 -p approach_offset:=0.0
+$ ros2 run handeye_calibration_ros handeye_calibration_auto --ros-args -p samples_file:=$(ros2 pkg prefix handeye_calibration_ros)/share/handeye_calibration_ros/calibration_files/2026-09-23_19-04-23_samples.json -p mode:=eye_to_hand -p piper_topic:=/end_pose -p settle_time:=5.0 -p approach_offset:=0.0
 ```
+`calibration_files/*.json` is installed to the package share directory by `setup.py`; rebuild after adding a new samples file, or pass any other path.
 
-|argument|default|Description|
-|---|---|---|
-|samples_file|`<share>/calibration_files/2026-09-23_19-04-23_samples.json`|recorded samples to replay (must be `*_samples.json`, not `*_calibration.json`)|
-|mode|eye_to_hand|hand-eye calibration mode|
-|piper_topic|/end_pose|robotic arm's end-effector pose topic|
-|settle_time|5.0|s the joints must stay within tolerance before capturing|
-|approach_offset|0.0|rad; nonzero makes each joint pass through target + offset first so backlash is taken up from one side|
+|param|value used above|node default|Description|
+|---|---|---|---|
+|samples_file|calibration_files/2026-09-23_19-04-23_samples.json|''|recorded samples to replay (must be `*_samples.json`, not `*_calibration.json`)|
+|settle_time|5.0|1.5|s the joints must stay within tolerance before capturing|
+|approach_offset|0.0|0.0|rad; nonzero makes each joint pass through target + offset first so backlash is taken up from one side|
+|command_topic| |/joint_states|joint position command topic|
+|joint_tolerance| |0.01|rad per joint to count as arrived|
+|move_timeout| |30.0|s per pose before skipping|
+|capture_timeout| |5.0|s to wait for each topic message|
+|confirm_start|false in launch file|true|wait for Enter before moving|
 
-`<share>` is `$(ros2 pkg prefix handeye_calibration_ros)/share/handeye_calibration_ros`. `calibration_files/*.json` is installed there by `setup.py`, so rebuild after adding a new samples file.
-
-Other node parameters (`command_topic`, `joint_tolerance`, `move_timeout`, `capture_timeout`, `marker_topic`, `joint_topic`) keep their node defaults; pass them with `ros2 run ... --ros-args -p` if needed. Output: `<timestamp>_samples.json`, `<timestamp>_calibration.json`, and `<timestamp>_replay.json` (replayed vs recorded pose differences).
+Output: `<timestamp>_samples.json`, `<timestamp>_calibration.json`, and `<timestamp>_replay.json` (replayed vs recorded pose differences).
