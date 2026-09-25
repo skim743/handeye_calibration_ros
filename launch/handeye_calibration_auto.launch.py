@@ -1,5 +1,5 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
@@ -52,6 +52,8 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        DeclareLaunchArgument('start_delay', default_value='5.0',
+                              description='s to wait for camera/arm/aruco before starting calibration'),
         DeclareLaunchArgument('eye', default_value='left'),
         DeclareLaunchArgument('marker_id', default_value='100'),
         DeclareLaunchArgument('marker_size', default_value='0.1'),
@@ -67,17 +69,23 @@ def generate_launch_description():
         camera,
         piper,
         aruco,
-        Node(
-            package='handeye_calibration_ros',
-            executable='handeye_calibration_auto',
-            output='screen',
-            emulate_tty=True,
-            parameters=[{
-                'samples_file': samples_file,
-                'mode': mode,
-                'piper_topic': piper_topic,
-                'settle_time': ParameterValue(settle_time, value_type=float),
-                'approach_offset': ParameterValue(approach_offset, value_type=float),
-            }],
+        # Start last so its Enter prompt isn't buried under the other nodes' startup logs
+        TimerAction(
+            period=LaunchConfiguration('start_delay'),
+            actions=[
+                Node(
+                    package='handeye_calibration_ros',
+                    executable='handeye_calibration_auto',
+                    output='screen',
+                    emulate_tty=True,
+                    parameters=[{
+                        'samples_file': samples_file,
+                        'mode': mode,
+                        'piper_topic': piper_topic,
+                        'settle_time': ParameterValue(settle_time, value_type=float),
+                        'approach_offset': ParameterValue(approach_offset, value_type=float),
+                    }],
+                ),
+            ],
         ),
     ])
