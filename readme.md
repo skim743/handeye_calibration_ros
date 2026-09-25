@@ -77,3 +77,45 @@ $ ros2 run handeye_calibration_ros handeye_calibration --ros-args -p piper_topic
 |min_num|int|10|minimum number of data sets|
 |piper_topic|string|piper_ctrl_node/end_pose|robotic arm's end-effector(geometry_msgs/Pose)|
 |marker_topic|string|aruco_single/pose|camera-recognized calibration board pose topic（geometry_msgs/PoseStamped）|
+
+### 2.5 Launch Files
+Two launch files wrap the record and auto-replay nodes with the eye-to-hand defaults used on the Piper setup. Rebuild after adding or editing them (`colcon build`), then override any argument with `name:=value`.
+
+`result_save_path` defaults to `./result`, so output files land relative to the directory you launch from.
+
+#### 2.5.1 Record (`handeye_calibration_record.launch.py`)
+Manual collection in teaching mode, same keys as 2.4. Each sample's joint state is also saved to `<timestamp>_samples.json` for later replay.
+```
+$ ros2 launch handeye_calibration_ros handeye_calibration_record.launch.py
+```
+Equivalent to:
+```
+$ ros2 run handeye_calibration_ros handeye_calibration_record --ros-args -p mode:=eye_to_hand -p piper_topic:=/end_pose
+```
+
+|argument|default|
+|---|---|
+|mode|eye_to_hand|
+|piper_topic|/end_pose|
+
+#### 2.5.2 Auto replay (`handeye_calibration_auto.launch.py`)
+Drives the arm through the joint configurations in a `*_samples.json` (position control, arm enabled and **not** in teaching mode), recollects every sample, and solves. Press `Enter` to start once the workspace is clear.
+```
+$ ros2 launch handeye_calibration_ros handeye_calibration_auto.launch.py samples_file:=/handeye_ws/result/<timestamp>_samples.json
+```
+Equivalent to:
+```
+$ ros2 run handeye_calibration_ros handeye_calibration_auto --ros-args -p samples_file:=<share>/calibration_files/2026-09-23_19-04-23_samples.json -p mode:=eye_to_hand -p piper_topic:=/end_pose -p settle_time:=5.0 -p approach_offset:=0.0
+```
+
+|argument|default|Description|
+|---|---|---|
+|samples_file|`<share>/calibration_files/2026-09-23_19-04-23_samples.json`|recorded samples to replay (must be `*_samples.json`, not `*_calibration.json`)|
+|mode|eye_to_hand|hand-eye calibration mode|
+|piper_topic|/end_pose|robotic arm's end-effector pose topic|
+|settle_time|5.0|s the joints must stay within tolerance before capturing|
+|approach_offset|0.0|rad; nonzero makes each joint pass through target + offset first so backlash is taken up from one side|
+
+`<share>` is `$(ros2 pkg prefix handeye_calibration_ros)/share/handeye_calibration_ros`. `calibration_files/*.json` is installed there by `setup.py`, so rebuild after adding a new samples file.
+
+Other node parameters (`command_topic`, `joint_tolerance`, `move_timeout`, `capture_timeout`, `marker_topic`, `joint_topic`) keep their node defaults; pass them with `ros2 run ... --ros-args -p` if needed. Output: `<timestamp>_samples.json`, `<timestamp>_calibration.json`, and `<timestamp>_replay.json` (replayed vs recorded pose differences).
