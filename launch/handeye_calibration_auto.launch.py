@@ -29,6 +29,11 @@ def generate_launch_description():
             'spatial_filter.enable': True,
             'temporal_filter.enable': True,
         }],
+        # Feed the color stream to aruco_ros single.launch.py (eye:=left)
+        remappings=[
+            ('/camera/camera/color/image_raw', '/stereo/left/image_rect_color'),
+            ('/camera/camera/color/camera_info', '/stereo/left/camera_info'),
+        ],
     )
 
     piper = IncludeLaunchDescription(
