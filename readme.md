@@ -81,6 +81,8 @@ $ ros2 run handeye_calibration_ros handeye_calibration --ros-args -p piper_topic
 ### 2.5 Launch Files
 Two launch files wrap the record and auto-replay nodes with the eye-to-hand defaults used on the Piper setup. Rebuild after adding or editing them (`colcon build`), then override any argument with `name:=value`.
 
+Both launch files also start ArUco detection (`aruco_ros single.launch.py`), so section 2.3 is not needed when using them. Defaults: `eye:=left marker_id:=100 marker_size:=0.1`.
+
 `result_save_path` defaults to `./result`, so output files land relative to the directory you launch from.
 
 #### 2.5.1 Record (`handeye_calibration_record.launch.py`)
