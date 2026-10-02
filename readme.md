@@ -94,10 +94,10 @@ $ ros2 launch handeye_calibration_ros handeye_bringup.launch.py
 |marker_id|100|passed to aruco_ros|
 |marker_size|0.1|passed to aruco_ros (m)|
 
-`result_save_path` defaults to `./result`, so the nodes below write output relative to the directory you run them from.
+`data_save_path` defaults to `./data`, so the nodes below write output relative to the directory you run them from.
 
 #### 2.5.1 Record
-Manual collection in teaching mode, same keys as 2.4. Each sample's joint state is also saved to `<timestamp>_samples.json` for later replay.
+Manual collection in teaching mode, same keys as 2.4. Each sample's joint state is also saved to `<data_save_path>/<mode>/<timestamp>_manual_samples.json` for later replay (auto runs use `_auto`).
 ```
 $ ros2 run handeye_calibration_ros handeye_calibration_record --ros-args -p mode:=eye_to_hand -p piper_topic:=/end_pose
 ```
@@ -126,4 +126,4 @@ $ ros2 run handeye_calibration_ros handeye_calibration_auto --ros-args -p sample
 |capture_timeout| |5.0|s to wait for each topic message|
 |confirm_start|false in launch file|true|wait for Enter before moving|
 
-Output: `<timestamp>_samples.json`, `<timestamp>_calibration.json`, and `<timestamp>_replay.json` (replayed vs recorded pose differences).
+Output (in `<data_save_path>/<mode>/`): `<timestamp>_auto_samples.json`, `<timestamp>_auto_calibration.json`, and `<timestamp>_auto_replay.json` (replayed vs recorded pose differences).

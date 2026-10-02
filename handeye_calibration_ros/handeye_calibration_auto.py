@@ -26,6 +26,8 @@ def pose_difference(a: PoseMartix, b: PoseMartix):
     return float(t_diff * 1000), float(np.degrees(r_diff))
 
 class HandEyeCalibrationAutoNode(HandEyeCalibrationNode):
+    SOURCE = 'auto'
+
     def __init__(self):
         super().__init__()
 
@@ -175,8 +177,8 @@ class HandEyeCalibrationAutoNode(HandEyeCalibrationNode):
               f"max {piper[:, 0].max():.1f} mm / {piper[:, 1].max():.2f} deg")
         print(f"marker vs recorded: mean {marker[:, 0].mean():.1f} mm / {marker[:, 1].mean():.2f} deg, "
               f"max {marker[:, 0].max():.1f} mm / {marker[:, 1].max():.2f} deg")
-        create_dir(self.result_save_path)
-        with open(f"{self.result_save_path}/{self.filename}_replay.json", 'w+') as json_file:
+        create_dir(self.data_save_path)
+        with open(f"{self.data_save_path}/{self.filename}_replay.json", 'w+') as json_file:
             json.dump(dict(samples_file = self.samples_file, approach_offset = self.approach_offset, poses = self.replay), json_file, indent=4)
 
 def main(args=None):

@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 import json
 import datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import sys
 import termios
 import tty
@@ -23,6 +24,15 @@ def clear_input_buffer():
         tty.setraw(sys.stdin)
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+def timestamp():
+    # File names use US Eastern wall-clock time (EST/EDT), whatever the container's TZ is
+    try:
+        now = datetime.datetime.now(ZoneInfo("America/New_York"))
+    except ZoneInfoNotFoundError:
+        print("WARNING: no tz database (apt install tzdata), using fixed UTC-5 for file names")
+        now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-5)))
+    return now.strftime("%Y-%m-%d_%H-%M-%S")
 
 def create_dir(dir=""):
     if dir == "" or dir == "/":
@@ -109,6 +119,8 @@ def consistency(piper_poses, marker_poses, R_x, t_x):
     return t_err, r_err
 
 class HandEyeCalibrationNode(Node):
+    SOURCE = 'manual'  # file name tag: how the samples were collected
+
     def __init__(self):
         super().__init__("handeye_calibration")
 
@@ -117,7 +129,7 @@ class HandEyeCalibrationNode(Node):
         self.declare_parameter('min_num', 10)
         self.declare_parameter('piper_topic', '/piper_ctrl_node/end_pose')
         self.declare_parameter('marker_topic', '/aruco_single/pose')
-        self.declare_parameter('result_save_path', './result')
+        self.declare_parameter('data_save_path', './data')
         self.declare_parameter('joint_topic', '/joint_states_single')
         # "/aruco_single/pose", "/piper_ctrl_node/end_pose"
 
@@ -125,20 +137,22 @@ class HandEyeCalibrationNode(Node):
         self.min_num = self.get_parameter('min_num').get_parameter_value().integer_value
         self.piper_topic = self.get_parameter('piper_topic').get_parameter_value().string_value
         self.marker_topic = self.get_parameter('marker_topic').get_parameter_value().string_value
-        self.result_save_path = self.get_parameter('result_save_path').get_parameter_value().string_value
+        self.data_save_path = self.get_parameter('data_save_path').get_parameter_value().string_value
         self.joint_topic = self.get_parameter('joint_topic').get_parameter_value().string_value
+        # Files go to <data_save_path>/<mode>/<timestamp>_<source>_{samples,calibration}.json
+        self.data_save_path = os.path.join(self.data_save_path, self.mode)
 
         print(f"mode: {self.mode}")
         print(f"min_num: {self.min_num}")
         print(f"piper_topic: {self.piper_topic}")
         print(f"marker_topic: {self.marker_topic}")
         print(f"joint_topic: {self.joint_topic}")
-        print(f"result_save_path: {self.result_save_path}")
+        print(f"data_save_path: {self.data_save_path}")
 
         self.piper_poses = []
         self.marker_poses = []
         self.joint_states = []
-        self.filename = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        self.filename = f"{timestamp()}_{self.SOURCE}"
 
     def save_samples(self):
         # Rewritten after every sample/undo so a crash or 'c' exit keeps the data
@@ -148,8 +162,8 @@ class HandEyeCalibrationNode(Node):
             piper_pose = dict(position = piper.position_list, orientation = piper.orientation_list),
             marker_pose = dict(position = marker.position_list, orientation = marker.orientation_list),
         ) for joint, piper, marker in zip(self.joint_states, self.piper_poses, self.marker_poses)]
-        create_dir(self.result_save_path)
-        with open(f"{self.result_save_path}/{self.filename}_samples.json", 'w+') as json_file:
+        create_dir(self.data_save_path)
+        with open(f"{self.data_save_path}/{self.filename}_samples.json", 'w+') as json_file:
             json.dump(dict(mode = self.mode, joint_topic = self.joint_topic, samples = samples), json_file, indent=4)
 
     def solve_handeye(self, method):
@@ -233,11 +247,11 @@ class HandEyeCalibrationNode(Node):
         print("method comparison (consistency RMS):")
         result['quality'] = self.final_quality()
         print("")
-        create_dir(self.result_save_path)
+        create_dir(self.data_save_path)
         filename = self.filename
-        with open(f"{self.result_save_path}/{filename}_calibration.json", 'w+') as json_file:
+        with open(f"{self.data_save_path}/{filename}_calibration.json", 'w+') as json_file:
             json.dump(result, json_file, indent=4)
-            print(f"writing to {self.result_save_path}/{filename}_calibration.json")
+            print(f"writing to {self.data_save_path}/{filename}_calibration.json")
 
     def get_poses(self):
         count = 1

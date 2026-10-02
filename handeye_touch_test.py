@@ -14,6 +14,7 @@ from sensor_msgs.msg import JointState
 from scipy.spatial.transform import Rotation
 import numpy as np
 import datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import json
 import os
 import sys
@@ -21,6 +22,15 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from piper_kinematics import PiperKinematics
+
+def timestamp():
+    # File names use US Eastern wall-clock time (EST/EDT), whatever the container's TZ is
+    try:
+        now = datetime.datetime.now(ZoneInfo("America/New_York"))
+    except ZoneInfoNotFoundError:
+        print("WARNING: no tz database (apt install tzdata), using fixed UTC-5 for file names")
+        now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-5)))
+    return now.strftime("%Y-%m-%d_%H-%M-%S")
 
 JOINT_NAMES = ['joint1', 'joint2', 'joint3', 'joint4', 'joint5', 'joint6']
 
@@ -34,7 +44,7 @@ class HandEyeTouchTestNode(Node):
         self.declare_parameter('joint_topic', '/joint_states_single')
         self.declare_parameter('marker_frames', 30)       # detections averaged per point
         self.declare_parameter('capture_timeout', 5.0)    # s
-        self.declare_parameter('result_save_path', './result')
+        self.declare_parameter('data_save_path', './data')
 
         self.calibration_file = self.get_parameter('calibration_file').get_parameter_value().string_value
         self.method = self.get_parameter('method').get_parameter_value().string_value
@@ -42,7 +52,8 @@ class HandEyeTouchTestNode(Node):
         self.joint_topic = self.get_parameter('joint_topic').get_parameter_value().string_value
         self.marker_frames = self.get_parameter('marker_frames').get_parameter_value().integer_value
         self.capture_timeout = self.get_parameter('capture_timeout').get_parameter_value().double_value
-        self.result_save_path = self.get_parameter('result_save_path').get_parameter_value().string_value
+        # Touch test only applies to eye_to_hand, so it shares that folder with the calibration runs
+        self.data_save_path = os.path.join(self.get_parameter('data_save_path').get_parameter_value().string_value, 'eye_to_hand')
 
         with open(self.calibration_file) as json_file:
             calibration = json.load(json_file)
@@ -58,7 +69,7 @@ class HandEyeTouchTestNode(Node):
 
         self.kinematics = PiperKinematics()  # default DH set matches the firmware's end_pose
         self.points = []
-        self.filename = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        self.filename = timestamp()
 
     def collect(self, topic, msg_type, count):
         msgs = []
@@ -100,8 +111,8 @@ class HandEyeTouchTestNode(Node):
         print(f"horizontal (xy) mean {np.linalg.norm(miss[:, :2], axis=1).mean():.1f} mm, vertical (z) mean {np.abs(miss[:, 2]).mean():.1f} mm")
 
     def save(self):
-        os.makedirs(self.result_save_path, exist_ok=True)
-        path = f"{self.result_save_path}/{self.filename}_touch_test.json"
+        os.makedirs(self.data_save_path, exist_ok=True)
+        path = f"{self.data_save_path}/{self.filename}_touch_test.json"
         with open(path, 'w+') as json_file:
             json.dump(dict(calibration_file = self.calibration_file, method = self.method, points = self.points), json_file, indent=4)
         return path
